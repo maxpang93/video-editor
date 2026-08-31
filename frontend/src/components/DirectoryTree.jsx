@@ -12,7 +12,15 @@ export default function DirectoryTree({ path = "", onSelectVideo }) {
   }, [path]);
 
   return (
-    <ul style={{ listStyleType: "none", paddingLeft: path ? "1rem" : "0" }}>
+    <ul
+      style={{
+        listStyleType: "none",
+        textAlign: "left", // Ensures left alignment regardless of global/parent CSS
+        paddingLeft: path ? "1.25rem" : "0", // Adds deeper indent for sub-trees
+        margin: 0,
+        borderLeft: path ? "2px solid #ccc" : "none", // Adds a subtle border guide for nested trees
+      }}
+    >
       {items.map((item) => {
         const itemPath = path ? `${path}/${item.name}` : item.name;
 
@@ -28,10 +36,14 @@ export default function DirectoryTree({ path = "", onSelectVideo }) {
         }
 
         return (
-          <li key={itemPath} style={{ margin: "4px 0" }}>
+          <li key={itemPath} style={{ margin: "4px 0", paddingLeft: "0.5rem" }}>
             <span
               onClick={() => onSelectVideo(itemPath)}
-              style={{ cursor: "pointer", color: "#0066cc" }}
+              style={{
+                cursor: "pointer",
+                color: "#0066cc",
+                display: "inline-block",
+              }}
             >
               🎥 {item.name}
             </span>
@@ -48,13 +60,20 @@ function FolderItem({ item, path, onSelectVideo }) {
 
   return (
     <li style={{ margin: "4px 0" }}>
-      <span
+      <div
         onClick={() => setExpanded(!expanded)}
-        style={{ cursor: "pointer", fontWeight: "bold", userSelect: "none" }}
+        style={{
+          cursor: "pointer",
+          fontWeight: "bold",
+          userSelect: "none",
+          display: "flex",
+          alignItems: "center",
+          gap: "6px",
+        }}
       >
-        {expanded ? "📂" : "📁"} {item.name}
-      </span>
-
+        <span>{expanded ? "📂" : "📁"}</span>
+        <span>{item.name}</span>
+      </div>
       {/* Render child tree lazy-loaded only when expanded */}
       {expanded && <DirectoryTree path={path} onSelectVideo={onSelectVideo} />}
     </li>
