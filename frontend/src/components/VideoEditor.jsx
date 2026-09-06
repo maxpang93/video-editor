@@ -23,6 +23,12 @@ export default function VideoEditor({ videoPath }) {
     }
   };
 
+  const handleRemoveSegment = (indexToRemove) => {
+    setSegments((currentSegments) =>
+      currentSegments.filter((_, index) => index !== indexToRemove),
+    );
+  };
+
   const handleSendForProcessing = async () => {
     const payload = {
       video_path: videoPath,
@@ -55,21 +61,46 @@ export default function VideoEditor({ videoPath }) {
       </div>
 
       <h4 style={{ marginTop: "1.5rem" }}>Configured Segments:</h4>
-      <ul>
-        {segments.map((segment, idx) => (
-          <li key={idx}>
-            Start:{" "}
-            <button onClick={() => handleSeek(segment.start)}>
-              {segment.start}s
-            </button>
-            {" — "}
-            End:{" "}
-            <button onClick={() => handleSeek(segment.end)}>
-              {segment.end}s
-            </button>
-          </li>
-        ))}
-      </ul>
+
+      <table
+        style={{
+          borderCollapse: "collapse",
+          marginTop: "1rem",
+          width: "100%",
+          maxWidth: "600px",
+        }}
+      >
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Start</th>
+            <th>End</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {segments.map((segment, index) => (
+            <tr key={index}>
+              <td>{index + 1}</td>
+              <td>
+                <button onClick={() => handleSeek(segment.start)}>
+                  {segment.start}s
+                </button>
+              </td>
+              <td>
+                <button onClick={() => handleSeek(segment.end)}>
+                  {segment.end}s
+                </button>
+              </td>
+              <td>
+                <button onClick={() => handleRemoveSegment(index)}>
+                  Remove
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
 
       <button
         onClick={handleSendForProcessing}
