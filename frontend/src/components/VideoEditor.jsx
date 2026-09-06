@@ -16,6 +16,13 @@ export default function VideoEditor({ videoPath }) {
     }
   };
 
+  const handleSeek = (time) => {
+    if (videoRef.current) {
+      videoRef.current.currentTime = time;
+      videoRef.current.pause();
+    }
+  };
+
   const handleSendForProcessing = async () => {
     const payload = {
       video_path: videoPath,
@@ -49,9 +56,17 @@ export default function VideoEditor({ videoPath }) {
 
       <h4 style={{ marginTop: "1.5rem" }}>Configured Segments:</h4>
       <ul>
-        {segments.map((s, idx) => (
+        {segments.map((segment, idx) => (
           <li key={idx}>
-            Start: {s.start}s — End: {s.end}s
+            Start:{" "}
+            <button onClick={() => handleSeek(segment.start)}>
+              {segment.start}s
+            </button>
+            {" — "}
+            End:{" "}
+            <button onClick={() => handleSeek(segment.end)}>
+              {segment.end}s
+            </button>
           </li>
         ))}
       </ul>
