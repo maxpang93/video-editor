@@ -65,7 +65,7 @@ export default function VideoEditor({ videoPath }) {
       <table
         style={{
           borderCollapse: "collapse",
-          marginTop: "1rem",
+          margin: "1rem auto 0",
           width: "100%",
           maxWidth: "600px",
         }}
