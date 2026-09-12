@@ -4,10 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	ffmpegworker "video-editor-backend/ffmpeg_worker"
+
+	"github.com/moby/moby/client"
 )
 
 var MediaFolder string = os.Getenv("MEDIA_FOLDER")
@@ -75,21 +78,32 @@ func ProcessVideoFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := os.Open(filepath.Join(MediaFolder, payload.VideoPath)); err != nil {
+	if _, err := os.Stat(filepath.Join(MediaFolder, payload.VideoPath)); err != nil {
 		http.Error(w, "File not found!", http.StatusNotFound)
+		return
 	}
 
 	ctx := context.Background()
-	err = ffmpegworker.BuildWorkerImage(ctx, "Dockerfile.worker")
-	if err != nil {
+	if err := ffmpegworker.BuildWorkerImage(ctx, "Dockerfile.worker"); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
-	for i, segment := range payload.Segments {
-		err = ffmpegworker.RunWorker(ctx, payload.VideoPath, segment.Start, segment.End, i+1)
-		if err != nil {
-			http.Error(w, "Video processing failed", http.StatusInternalServerError)
-			return
-		}
+	err = ffmpegworker.WithWorkerContainer(
+		ctx,
+		func(cli *client.Client, containerID string) error {
+			for i, segment := range payload.Segments {
+				cmd := ffmpegworker.GetTrimVideoCmd(payload.VideoPath, segment.Start, segment.End, i+1)
+				if err := ffmpegworker.ExecContainerCmd(ctx, cli, containerID, cmd); err != nil {
+					return err
+				}
+			}
+			return nil
+		},
+	)
+	if err != nil {
+		log.Printf("video processing failed: %v", err)
+		http.Error(w, "Video processing failed", http.StatusInternalServerError)
+		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)

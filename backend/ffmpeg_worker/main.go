@@ -17,8 +17,7 @@ import (
 func streamBuildContext(dockerfile string) (io.Reader, error) {
 	dockerfileContent, err := os.ReadFile(dockerfile)
 	if err != nil {
-		log.Printf("Failed to open dockerfile: %s\n", dockerfile)
-		return nil, err
+		return nil, fmt.Errorf("read Dockerfile %q: %w", dockerfile, err)
 	}
 	buf := new(bytes.Buffer)
 	tw := tar.NewWriter(buf)
@@ -42,15 +41,13 @@ func streamBuildContext(dockerfile string) (io.Reader, error) {
 func BuildWorkerImage(ctx context.Context, dockerfile string) error {
 	cli, err := client.New(client.FromEnv, client.WithAPIVersionFromEnv())
 	if err != nil {
-		log.Println("Failed to initialize docker client")
-		return err
+		return fmt.Errorf("initialize Docker client: %w", err)
 	}
 	defer cli.Close()
 
 	buildContext, err := streamBuildContext(dockerfile)
 	if err != nil {
-		log.Printf("Failed generate build context tar stream for dockerfile: %s\n", dockerfile)
-		return err
+		return fmt.Errorf("generate build context for Dockerfile %q: %w", dockerfile, err)
 	}
 
 	buildOpts := client.ImageBuildOptions{
@@ -59,13 +56,12 @@ func BuildWorkerImage(ctx context.Context, dockerfile string) error {
 	}
 	buildResult, err := cli.ImageBuild(ctx, buildContext, buildOpts)
 	if err != nil {
-		log.Printf("Failed to build image. dockerfile: %s buildOpts: %v\n", dockerfile, buildOpts)
-		return err
+		return fmt.Errorf("build image from Dockerfile %q: %w", dockerfile, err)
 	}
 	defer buildResult.Body.Close()
 
 	_, err = io.Copy(os.Stdout, buildResult.Body)
-	return nil
+	return err
 }
 
 func secondsToTimestamp(t int) string {
@@ -83,15 +79,13 @@ func splitFileExt(filename string) (name string, ext string) {
 	return
 }
 
-func RunWorker(ctx context.Context, videoPath string, start int, end int, part int) error {
-	log.Printf(
-		"Processing part %d of video %s. Start %s. End %s",
-		part, videoPath, secondsToTimestamp(start), secondsToTimestamp(end),
-	)
+func WithWorkerContainer(
+	ctx context.Context,
+	work func(cli *client.Client, containerID string) error,
+) error {
 	cli, err := client.New(client.FromEnv, client.WithAPIVersionFromEnv())
 	if err != nil {
-		log.Println("Failed to initialize docker client")
-		return err
+		return fmt.Errorf("initialize Docker client: %w", err)
 	}
 	defer cli.Close()
 
@@ -114,57 +108,65 @@ func RunWorker(ctx context.Context, videoPath string, start int, end int, part i
 		HostConfig: hostConfig,
 	})
 	if err != nil {
-		log.Printf("Failed to create container: %v\n", err)
-		return err
+		return fmt.Errorf("create worker container: %w", err)
 	}
 	containerID := createResult.ID
 
 	log.Printf("Starting container %s...\n", containerID)
-	_, err = cli.ContainerStart(ctx, containerID, client.ContainerStartOptions{})
-	if err != nil {
-		log.Printf("Failed to start container: %v\n", err)
-		return err
+	if _, err := cli.ContainerStart(ctx, containerID, client.ContainerStartOptions{}); err != nil {
+		_, _ = cli.ContainerRemove(ctx, containerID, client.ContainerRemoveOptions{
+			Force: true,
+		})
+		return fmt.Errorf("start worker container: %w", err)
 	}
 	defer func() {
 		log.Printf("Cleaning up container %s...\n", containerID)
-		_, err := cli.ContainerRemove(ctx, containerID, client.ContainerRemoveOptions{
+		if _, err := cli.ContainerRemove(ctx, containerID, client.ContainerRemoveOptions{
 			Force: true,
-		})
-		if err != nil {
+		}); err != nil {
 			log.Printf("Failed to remove container: %v\n", err)
 		}
 	}()
 
+	return work(cli, containerID)
+}
+
+func GetTrimVideoCmd(videoPath string, start int, end int, part int) []string {
+	log.Printf(
+		"Trim video cmd for part %d of video %s. Start %s. End %s",
+		part, videoPath, secondsToTimestamp(start), secondsToTimestamp(end),
+	)
+	return []string{
+		"ffmpeg", "-y",
+		"-ss", secondsToTimestamp(start),
+		"-t", secondsToTimestamp(end - start),
+		"-i", filepath.Join("/video", videoPath),
+		"-c", "copy",
+		filepath.Join("/video", fmt.Sprintf("output-%d.mp4", part)),
+	}
+}
+
+func ExecContainerCmd(ctx context.Context, cli *client.Client, containerID string, cmd []string) error {
 	execCreateResult, err := cli.ExecCreate(ctx, containerID, client.ExecCreateOptions{
 		AttachStdout: true,
 		AttachStderr: true,
 		TTY:          true,
-		Cmd: []string{
-			"ffmpeg", "-y",
-			"-ss", secondsToTimestamp(start),
-			"-t", secondsToTimestamp(end - start),
-			"-i", filepath.Join("/video", videoPath),
-			"-c", "copy",
-			filepath.Join("/video", fmt.Sprintf("output-%d.mp4", part)),
-		},
+		Cmd:          cmd,
 	})
 	if err != nil {
-		log.Printf("Failed to exec create: %v\n", err)
-		return err
+		return fmt.Errorf("create exec in container %q: %w", containerID, err)
 	}
 
 	execID := execCreateResult.ID
 	execAttachResult, err := cli.ExecAttach(ctx, execID, client.ExecAttachOptions{})
 	if err != nil {
-		log.Printf("Failed to exec attach: %v\n", err)
-		return err
+		return fmt.Errorf("attach to exec %q: %w", execID, err)
 	}
 	defer execAttachResult.Close()
 
 	_, err = cli.ExecStart(ctx, execID, client.ExecStartOptions{})
 	if err != nil {
-		log.Printf("Failed to exec start: %v\n", err)
-		return err
+		return fmt.Errorf("start exec %q: %w", execID, err)
 	}
 
 	_, err = io.Copy(os.Stdout, execAttachResult.Reader)
