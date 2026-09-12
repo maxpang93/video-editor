@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/google/uuid"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/client"
 )
@@ -131,6 +132,11 @@ func WithWorkerContainer(
 	return work(cli, containerID)
 }
 
+func GetOutputVideoPath(videoPath string, part int) string {
+	filename, ext := splitFileExt(videoPath)
+	return fmt.Sprintf("%s-%d%s", filename, part, ext)
+}
+
 func GetTrimVideoCmd(videoPath string, start int, end int, part int) []string {
 	log.Printf(
 		"Trim video cmd for part %d of video %s. Start %s. End %s",
@@ -142,8 +148,56 @@ func GetTrimVideoCmd(videoPath string, start int, end int, part int) []string {
 		"-t", secondsToTimestamp(end - start),
 		"-i", filepath.Join("/video", videoPath),
 		"-c", "copy",
-		filepath.Join("/video", fmt.Sprintf("output-%d.mp4", part)),
+		filepath.Join("/video", GetOutputVideoPath(videoPath, part)),
 	}
+}
+
+func GetMergeVideoCmd(videoPath string, mergeMetadataPath string) []string {
+	return []string{
+		"ffmpeg", "-y",
+		"-f", "concat",
+		"-safe", "0",
+		"-i", filepath.Join("/video", mergeMetadataPath),
+		"-c", "copy",
+		filepath.Join("/video", GetOutputVideoPath(videoPath, 0)),
+	}
+}
+
+func MergeVideos(videoPath string, segments int) error {
+	// Create unique merge metadata file on host system
+	mergeMetadata := fmt.Sprintf("merge-%s.txt", uuid.New().String())
+	mergeMetadataPath := filepath.Join(filepath.Dir(videoPath), mergeMetadata)
+	mergeMetadataHostPath := filepath.Join(os.Getenv("MEDIA_FOLDER"), mergeMetadataPath)
+
+	file, err := os.Create(mergeMetadataHostPath)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := os.Remove(mergeMetadataHostPath); err != nil {
+			log.Printf("Error removing file: %v", err)
+		}
+	}()
+
+	for i := range segments {
+		partPath := GetOutputVideoPath(videoPath, i+1)
+		if _, err := fmt.Fprintf(file, "file '%s'\n", filepath.Base(partPath)); err != nil {
+			return fmt.Errorf("write merge metadata: %w", err)
+		}
+	}
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("error closing file: %w", err)
+	}
+
+	ctx := context.Background()
+	err = WithWorkerContainer(
+		ctx,
+		func(cli *client.Client, containerID string) error {
+			cmd := GetMergeVideoCmd(videoPath, mergeMetadataPath)
+			return ExecContainerCmd(ctx, cli, containerID, cmd)
+		},
+	)
+	return err
 }
 
 func ExecContainerCmd(ctx context.Context, cli *client.Client, containerID string, cmd []string) error {
@@ -170,9 +224,5 @@ func ExecContainerCmd(ctx context.Context, cli *client.Client, containerID strin
 	}
 
 	_, err = io.Copy(os.Stdout, execAttachResult.Reader)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }

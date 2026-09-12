@@ -106,5 +106,11 @@ func ProcessVideoFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err = ffmpegworker.MergeVideos(payload.VideoPath, len(payload.Segments)); err != nil {
+		log.Printf("video merging failed: %v", err)
+		http.Error(w, "Video merging failed", http.StatusInternalServerError)
+		return
+	}
+
 	w.WriteHeader(http.StatusNoContent)
 }
