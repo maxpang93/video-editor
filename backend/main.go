@@ -84,4 +84,13 @@ func ProcessVideoFile(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+	for i, segment := range payload.Segments {
+		err = ffmpegworker.RunWorker(ctx, payload.VideoPath, segment.Start, segment.End, i+1)
+		if err != nil {
+			http.Error(w, "Video processing failed", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
