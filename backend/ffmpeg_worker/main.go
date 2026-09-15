@@ -179,8 +179,10 @@ func MergeVideos(videoPath string, segments int) error {
 		}
 	}()
 
+	var parts []string
 	for i := range segments {
 		partPath := GetOutputVideoPath(videoPath, i+1)
+		parts = append(parts, partPath)
 		if _, err := fmt.Fprintf(file, "file '%s'\n", filepath.Base(partPath)); err != nil {
 			return fmt.Errorf("write merge metadata: %w", err)
 		}
@@ -190,14 +192,23 @@ func MergeVideos(videoPath string, segments int) error {
 	}
 
 	ctx := context.Background()
-	err = WithWorkerContainer(
+	if err = WithWorkerContainer(
 		ctx,
 		func(cli *client.Client, containerID string) error {
 			cmd := GetMergeVideoCmd(videoPath, mergeMetadataPath)
 			return ExecContainerCmd(ctx, cli, containerID, cmd)
 		},
-	)
-	return err
+	); err != nil {
+		return err
+	}
+
+	for _, partPath := range parts {
+		err := os.Remove(filepath.Join(os.Getenv("MEDIA_FOLDER"), partPath))
+		if err != nil {
+			return fmt.Errorf("error removing file %s: %w", partPath, err)
+		}
+	}
+	return nil
 }
 
 func ExecContainerCmd(ctx context.Context, cli *client.Client, containerID string, cmd []string) error {
