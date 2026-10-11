@@ -1,0 +1,99 @@
+x-worker-base: &worker-base
+  build:
+    context: .
+    dockerfile: Dockerfile.k3s-worker
+  image: k3s-worker-image:latest
+  privileged: true
+  env_file:
+    - .env
+  environment:
+    - K3S_URL=https://${K3S_MASTER_IP:-172.20.0.10}:6443
+    - K3S_TOKEN=${K3S_TOKEN:-k3s-cluster-secret-token}
+  depends_on:
+    k3s-master:
+      condition: service_healthy
+  networks:
+    - k3s-network
+  volumes:
+    - /lib/modules:/lib/modules:ro
+    - /var/lib/rancher/k3s
+    - ${MEDIA_FOLDER:-./media}:/media
+
+services:
+  k3s-master:
+    build:
+      context: .
+      dockerfile: Dockerfile.k3s-master
+    image: k3s-master-image:latest
+    container_name: k3s-master
+    hostname: k3s-master
+    privileged: true
+    command:
+      - k3s
+      - server
+      - --snapshotter=native
+      - --write-kubeconfig=/output/k3s.yaml
+      - --write-kubeconfig-mode=644
+    deploy:
+      resources:
+        limits:
+          cpus: 2.0
+          memory: 3G # OOM-killed if exceeded
+        reservations:
+          cpus: 2.0
+          memory: 2G
+    env_file:
+      - .env
+    environment:
+      - K3S_TOKEN=${K3S_TOKEN:-k3s-cluster-secret-token}
+    ports:
+      - "6443:6443"
+    networks:
+      k3s-network:
+        ipv4_address: ${K3S_MASTER_IP:-172.20.0.10}
+    volumes:
+      - /lib/modules:/lib/modules:ro
+      - k3s-master-data:/var/lib/rancher/k3s
+      - ./.k3s-kubeconfig:/output
+    healthcheck:
+      test: ["CMD", "curl", "-k", "-f", "https://127.0.0.1:6443/ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  k3s-worker-lite:
+    <<: *worker-base
+    container_name: k3s-worker-lite
+    hostname: k3s-worker-lite
+    deploy:
+      resources:
+        limits:
+          cpus: 2.0
+          memory: 5G # OOM-killed if exceeded
+        reservations:
+          cpus: 1.0
+          memory: 1G
+
+  k3s-worker-heavy:
+    <<: *worker-base
+    container_name: k3s-worker-heavy
+    hostname: k3s-worker-heavy
+    deploy:
+      resources:
+        limits:
+          cpus: 4.0
+          memory: 10G # OOM-killed if exceeded
+        reservations:
+          cpus: 1.0
+          memory: 1G
+    
+
+networks:
+  k3s-network:
+    ipam:
+      config:
+        - subnet: ${K3S_NETWORK_SUBNET:-172.20.0.0/16}
+
+volumes:
+  k3s-master-data:

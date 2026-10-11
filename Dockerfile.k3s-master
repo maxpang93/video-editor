@@ -1,0 +1,21 @@
+FROM ubuntu:26.04
+
+RUN apt-get update && apt-get install -y curl && \
+    curl -Lo /usr/local/bin/k3s https://github.com/k3s-io/k3s/releases/download/v1.36.4+k3s1/k3s && \
+    chmod a+x /usr/local/bin/k3s
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    iptables \
+    iproute2 \
+    ebtables \
+    socat \
+    conntrack \
+    procps && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Expose the Kubernetes API server port
+EXPOSE 6443
+
+# Command to run the K3s server natively
+CMD ["k3s", "server", "--snapshotter=native"]
