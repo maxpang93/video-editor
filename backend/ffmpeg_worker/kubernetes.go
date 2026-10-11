@@ -3,6 +3,7 @@ package ffmpegworker
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 
 	batchv1 "k8s.io/api/batch/v1"
@@ -26,7 +27,7 @@ func init() {
 	var err error
 	K8sClient, err = NewK8sClient()
 	if err != nil {
-		panic(err)
+		log.Printf("Kubernetes client initialization skipped/failed: %v", err)
 	}
 
 	// BuildWorkerImage(context.Background(), "Dockerfile.worker")
@@ -42,6 +43,14 @@ func NewK8sClient() (*kubernetes.Clientset, error) {
 	config.Host = fmt.Sprintf("https://%s:6443", os.Getenv("K3S_MASTER_IP"))
 
 	return kubernetes.NewForConfig(config)
+}
+
+func IsK8sAvailable() bool {
+	if K8sClient == nil {
+		return false
+	}
+	_, err := K8sClient.Discovery().ServerVersion()
+	return err == nil
 }
 
 func newJob(command []string, cpuRequest, memRequest string) *batchv1.Job {

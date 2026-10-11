@@ -8,9 +8,13 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	ffmpegworker "video-editor-backend/ffmpeg_worker"
 
 	"github.com/moby/moby/client"
+
+	// prioritize config setup by first import
+	_ "video-editor-backend/config"
+
+	ffmpegworker "video-editor-backend/ffmpeg_worker"
 )
 
 var MediaFolder string = os.Getenv("MEDIA_FOLDER")
@@ -88,7 +92,22 @@ func ProcessVideoFile(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	err = ffmpegworker.WithWorkerContainer(
+
+	if ffmpegworker.IsK8sAvailable() {
+		log.Println("Process with k3s")
+	} else {
+		log.Println("Process with docker")
+		if err = RunDocker(ctx, payload); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func RunDocker(ctx context.Context, payload ProcessVideoFilePayload) error {
+	if err := ffmpegworker.WithWorkerContainer(
 		ctx,
 		func(cli *client.Client, containerID string) error {
 			for i, segment := range payload.Segments {
@@ -99,18 +118,12 @@ func ProcessVideoFile(w http.ResponseWriter, r *http.Request) {
 			}
 			return nil
 		},
-	)
-	if err != nil {
-		log.Printf("video processing failed: %v", err)
-		http.Error(w, "Video processing failed", http.StatusInternalServerError)
-		return
+	); err != nil {
+		return fmt.Errorf("video processing failed: %w", err)
 	}
 
-	if err = ffmpegworker.MergeVideos(payload.VideoPath, len(payload.Segments)); err != nil {
-		log.Printf("video merging failed: %v", err)
-		http.Error(w, "Video merging failed", http.StatusInternalServerError)
-		return
+	if err := ffmpegworker.MergeVideos(payload.VideoPath, len(payload.Segments)); err != nil {
+		return fmt.Errorf("video merging failed: %w", err)
 	}
-
-	w.WriteHeader(http.StatusNoContent)
+	return nil
 }
