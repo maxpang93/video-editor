@@ -36,3 +36,23 @@ Verify can pull image
 ```bash
 docker compose exec k3s-worker-lite k3s crictl pull registry:5000/ffmpeg-worker:latest
 ```
+
+## Argo Workflow
+Setup
+```bash
+export KUBECONFIG=.k3s-kubeconfig/k3s.yaml && \
+kubectl create namespace argo && \
+kubectl apply --server-side -n argo \
+  -f https://github.com/argoproj/argo-workflows/releases/download/v4.1.5/install.yaml && \
+kubectl -n argo apply -f deploy/argo/trim-merge.yaml
+```
+
+Check workflow status
+```bash
+kubectl -n argo get workflow
+```
+
+Observe workflow execution's pod lifecycle
+```bash
+kubectl -n argo get pods -w
+```

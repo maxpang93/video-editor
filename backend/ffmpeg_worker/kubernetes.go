@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
@@ -33,7 +34,7 @@ func init() {
 	// BuildWorkerImage(context.Background(), "Dockerfile.worker")
 }
 
-func NewK8sClient() (*kubernetes.Clientset, error) {
+func NewK8sConfig() (*rest.Config, error) {
 	kubeconfig := os.Getenv("K3S_KUBECONFIG")
 	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
@@ -41,7 +42,14 @@ func NewK8sClient() (*kubernetes.Clientset, error) {
 	}
 
 	config.Host = fmt.Sprintf("https://%s:6443", os.Getenv("K3S_MASTER_IP"))
+	return config, nil
+}
 
+func NewK8sClient() (*kubernetes.Clientset, error) {
+	config, err := NewK8sConfig()
+	if err != nil {
+		return nil, err
+	}
 	return kubernetes.NewForConfig(config)
 }
 

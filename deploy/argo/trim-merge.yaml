@@ -1,0 +1,77 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: trim-merge
+  namespace: argo
+spec:
+  entrypoint: trim-merge
+  serviceAccountName: argo
+  # parallelism: 4  # Unset intentionally: let Argo create all pods immediately so the Kubernetes
+                    # scheduler manages the queue via Pending pods based on node resource requests.
+  volumes:
+    - name: media
+      hostPath: { path: /media, type: Directory }
+  arguments:
+    parameters:
+      - name: video
+      - name: output
+      - name: parts
+      - name: segments
+  templates:
+    - name: trim-merge
+      dag:
+        tasks:
+          - name: trim
+            template: trim
+            arguments:
+              parameters:
+                - name: start
+                  value: "{{item.start}}"
+                - name: end
+                  value: "{{item.end}}"
+                - name: output
+                  value: "{{item.output}}"
+            withParam: "{{workflow.parameters.segments}}"
+          - name: merge
+            dependencies: [trim]
+            template: merge
+
+    - name: trim
+      inputs:
+        parameters:
+          - name: start
+          - name: end
+          - name: output
+      container:
+        image: registry:5000/ffmpeg-worker:latest
+        imagePullPolicy: IfNotPresent
+        command: [sh, -c]
+        args:
+          - |
+            set -e
+            ffmpeg -y -ss {{inputs.parameters.start}} -to {{inputs.parameters.end}} \
+              -i /video/{{workflow.parameters.video}} -c copy /video/{{inputs.parameters.output}}
+        volumeMounts: [{ name: media, mountPath: /video }]
+        resources:
+          requests: { cpu: 500m, memory: 256Mi }
+          limits: { cpu: 1000m, memory: 512Mi }
+
+    - name: merge
+      container:
+        image: registry:5000/ffmpeg-worker:latest
+        imagePullPolicy: IfNotPresent
+        command: [sh, -c]
+        args:
+          - |
+            set -e
+            cd /video
+            LIST_FILE=$(mktemp /tmp/list.XXXXXX.txt)
+            trap 'rm -f "$LIST_FILE"' EXIT
+            for f in {{workflow.parameters.parts}}; do
+              echo "file '$f'" >> "$LIST_FILE"
+            done
+            ffmpeg -y -f concat -safe 0 -i "$LIST_FILE" -c copy {{workflow.parameters.output}}
+        volumeMounts: [{ name: media, mountPath: /video }]
+        resources:
+          requests: { cpu: 500m, memory: 256Mi }
+          limits: { cpu: 1000m, memory: 512Mi }

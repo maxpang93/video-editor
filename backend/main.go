@@ -95,6 +95,10 @@ func ProcessVideoFile(w http.ResponseWriter, r *http.Request) {
 
 	if ffmpegworker.IsK8sAvailable() {
 		log.Println("Process with k3s")
+		if _, err = RunK8s(ctx, payload); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	} else {
 		log.Println("Process with docker")
 		if err = RunDocker(ctx, payload); err != nil {
@@ -126,4 +130,22 @@ func RunDocker(ctx context.Context, payload ProcessVideoFilePayload) error {
 		return fmt.Errorf("video merging failed: %w", err)
 	}
 	return nil
+}
+
+func RunK8s(ctx context.Context, payload ProcessVideoFilePayload) (string, error) {
+	config, err := ffmpegworker.NewK8sConfig()
+	if err != nil {
+		return "", err
+	}
+
+	segments := make([]ffmpegworker.Segment, len(payload.Segments))
+	for i, segment := range payload.Segments {
+		segments[i] = ffmpegworker.Segment{
+			Start:  segment.Start,
+			End:    segment.End,
+			Output: ffmpegworker.GetOutputVideoPath(payload.VideoPath, i+1),
+		}
+	}
+
+	return ffmpegworker.SubmitTrimMergeWorkflow(ctx, config, payload.VideoPath, segments)
 }
