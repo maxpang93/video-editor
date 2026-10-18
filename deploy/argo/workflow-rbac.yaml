@@ -1,0 +1,37 @@
+# Grant permissions for workflow pods to report task execution results.
+#
+# Rationale:
+# Argo Workflows (v3.5+) uses the Emissary executor, where each workflow pod runs an
+# `argoexec wait` sidecar container that reports task status back to the workflow-controller
+# via the `workflowtaskresults.argoproj.io` CRD.
+#
+# Without this Role and RoleBinding, the main FFmpeg container succeeds (exit code 0),
+# but the `wait` sidecar fails with exit code 64 ("workflowtaskresults.argoproj.io is forbidden"),
+# causing Kubernetes to mark the pod as Failed / Error.
+#
+# Apply:
+#   kubectl apply -f deploy/argo/workflow-rbac.yaml
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: argo-workflow-pod-role
+  namespace: argo
+rules:
+  - apiGroups: ["argoproj.io"]
+    resources: ["workflowtaskresults"]
+    verbs: ["create", "patch", "get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: argo-workflow-pod-binding
+  namespace: argo
+subjects:
+  - kind: ServiceAccount
+    name: argo
+    namespace: argo
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: argo-workflow-pod-role

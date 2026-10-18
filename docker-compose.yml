@@ -39,6 +39,7 @@ services:
       - --snapshotter=native
       - --write-kubeconfig=/output/k3s.yaml
       - --write-kubeconfig-mode=644
+      - --node-taint=node-role.kubernetes.io/control-plane:NoSchedule
     deploy:
       resources:
         limits:

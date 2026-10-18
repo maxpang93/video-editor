@@ -1,3 +1,24 @@
+# Argo WorkflowTemplate for distributed video trimming and merging.
+#
+# Architecture:
+# - DAG pipeline:
+#     1. `trim` (Parallel): Dynamically spawns 1 pod per segment via `withParam`.
+#        Trims time ranges using stream copy (`-c copy`) without re-encoding.
+#     2. `merge` (Sequential): Depends on `trim`. Concatenates all trimmed parts
+#        into the final output video using FFmpeg's concat demuxer.
+# - Storage: Mounts the shared host `/media` directory into `/video` in each pod.
+# - Image: Uses `registry:5000/ffmpeg-worker:latest` from the in-cluster registry.
+# - RBAC: Runs under `serviceAccountName: argo` (configured via `deploy/argo/workflow-rbac.yaml`).
+#
+# Parameters:
+# - video: Source video filename in `/video` (e.g. "input.mp4")
+# - output: Target merged video filename in `/video` (e.g. "output.mp4")
+# - parts: Space-separated filenames of trimmed segment files (for the concat list)
+# - segments: JSON array string of segments: '[{"start":0,"end":10,"output":"part-1.mp4"},...]'
+#
+# Apply:
+#   kubectl apply -f deploy/argo/trim-merge.yaml
+
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:

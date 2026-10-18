@@ -44,7 +44,9 @@ export KUBECONFIG=.k3s-kubeconfig/k3s.yaml && \
 kubectl create namespace argo && \
 kubectl apply --server-side -n argo \
   -f https://github.com/argoproj/argo-workflows/releases/download/v4.1.5/install.yaml && \
-kubectl -n argo apply -f deploy/argo/trim-merge.yaml
+kubectl apply -f deploy/argo/infra-patch.yaml && \
+kubectl apply -f deploy/argo/workflow-rbac.yaml && \
+kubectl apply -f deploy/argo/trim-merge.yaml
 ```
 
 Check workflow status

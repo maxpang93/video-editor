@@ -1,0 +1,32 @@
+# Pin Argo infrastructure controllers to the control-plane node (k3s-master).
+#
+# Rationale:
+# Worker nodes (k3s-worker-lite and k3s-worker-heavy) run resource-heavy, bursty FFmpeg
+# video processing jobs that can cause high CPU/memory spikes or OOM events.
+# Isolating the Argo workflow-controller and argo-server on k3s-master ensures that
+# workflow orchestration and the Argo UI remain responsive even under heavy transcoding loads.
+#
+# Applied via Kubernetes strategic merge patch on top of upstream Argo manifests:
+#   kubectl apply -f deploy/argo/infra-patch.yaml
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: workflow-controller
+  namespace: argo
+spec:
+  template:
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: k3s-master
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: argo-server
+  namespace: argo
+spec:
+  template:
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: k3s-master
