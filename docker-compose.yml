@@ -9,6 +9,10 @@ x-worker-base: &worker-base
   environment:
     - K3S_URL=https://${K3S_MASTER_IP:-172.20.0.10}:6443
     - K3S_TOKEN=${K3S_TOKEN:-k3s-cluster-secret-token}
+  command:
+  - k3s
+  - agent
+  - --snapshotter=native
   depends_on:
     k3s-master:
       condition: service_healthy
@@ -87,7 +91,7 @@ services:
         reservations:
           cpus: 1.0
           memory: 1G
-    
+
 
 networks:
   k3s-network:

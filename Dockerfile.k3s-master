@@ -16,6 +16,3 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Expose the Kubernetes API server port
 EXPOSE 6443
-
-# Command to run the K3s server natively
-CMD ["k3s", "server", "--snapshotter=native"]

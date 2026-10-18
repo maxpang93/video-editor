@@ -13,6 +13,3 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     conntrack \
     procps && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
-
-# Run K3s agent connecting to master using environment variables
-CMD ["sh", "-c", "exec k3s agent --server ${K3S_URL} --token ${K3S_TOKEN} --snapshotter=native"]
