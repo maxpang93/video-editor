@@ -18,11 +18,6 @@ x-worker-base: &worker-base
       condition: service_healthy
   networks:
     - k3s-network
-  volumes:
-    - /lib/modules:/lib/modules:ro
-    - /var/lib/rancher/k3s
-    - ${MEDIA_FOLDER:-./media}:/media
-    - ./registries.yaml:/etc/rancher/k3s/registries.yaml:ro
 
 services:
   k3s-master:
@@ -73,6 +68,12 @@ services:
     <<: *worker-base
     container_name: k3s-worker-lite
     hostname: k3s-worker-lite
+    volumes:
+      - /lib/modules:/lib/modules:ro
+      - k3s-worker-lite-data:/var/lib/rancher/k3s
+      - k3s-worker-lite-node:/etc/rancher/node
+      - ${MEDIA_FOLDER:-./media}:/media
+      - ./registries.yaml:/etc/rancher/k3s/registries.yaml:ro
     deploy:
       resources:
         limits:
@@ -86,6 +87,12 @@ services:
     <<: *worker-base
     container_name: k3s-worker-heavy
     hostname: k3s-worker-heavy
+    volumes:
+      - /lib/modules:/lib/modules:ro
+      - k3s-worker-heavy-data:/var/lib/rancher/k3s
+      - k3s-worker-heavy-node:/etc/rancher/node
+      - ${MEDIA_FOLDER:-./media}:/media
+      - ./registries.yaml:/etc/rancher/k3s/registries.yaml:ro
     deploy:
       resources:
         limits:
@@ -112,3 +119,7 @@ networks:
 
 volumes:
   k3s-master-data:
+  k3s-worker-lite-data:
+  k3s-worker-lite-node:
+  k3s-worker-heavy-data:
+  k3s-worker-heavy-node:

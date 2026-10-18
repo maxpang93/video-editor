@@ -19,6 +19,10 @@ spec:
     spec:
       nodeSelector:
         kubernetes.io/hostname: k3s-master
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -30,3 +34,7 @@ spec:
     spec:
       nodeSelector:
         kubernetes.io/hostname: k3s-master
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
