@@ -86,12 +86,12 @@ spec:
           - |
             set -e
             cd /video
-            LIST_FILE=$(mktemp /tmp/list.XXXXXX.txt)
+            LIST_FILE=$(mktemp /tmp/list.XXXXXX)
             trap 'rm -f "$LIST_FILE"' EXIT
             for f in {{workflow.parameters.parts}}; do
-              echo "file '$f'" >> "$LIST_FILE"
+              echo "file '/video/$f'" >> "$LIST_FILE"
             done
-            ffmpeg -y -f concat -safe 0 -i "$LIST_FILE" -c copy {{workflow.parameters.output}}
+            ffmpeg -y -f concat -safe 0 -i "$LIST_FILE" -c copy /video/{{workflow.parameters.output}}
         volumeMounts: [{ name: media, mountPath: /video }]
         resources:
           requests: { cpu: 500m, memory: 256Mi }
