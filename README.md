@@ -1,5 +1,6 @@
 # video-editor
 
+## Cluster Setup
 Generate K3S_TOKEN and put in .env
 ```bash
 # Option 1: 32-byte hex string (recommended)
@@ -17,4 +18,21 @@ docker compose up -d
 Verify joined nodes inside K3s:
 ```bash
 docker exec -it k3s-master kubectl get nodes
+```
+
+## Local Image Registry Setup
+Check local image registry reachable inside k3s nodes:
+```bash
+docker compose exec k3s-worker-lite curl -i http://registry:5000/v2/
+```
+
+Build and push ffmpeg worker image to image registry
+```bash
+docker build -t localhost:5000/ffmpeg-worker:latest backend/ -f backend/Dockerfile.worker
+docker push localhost:5000/ffmpeg-worker:latest
+```
+
+Verify can pull image
+```bash
+docker compose exec k3s-worker-lite k3s crictl pull registry:5000/ffmpeg-worker:latest
 ```
